@@ -3,7 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import {User} from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudnary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-
+import jwt from "jsonwebtoken"
 
 const registerUser = asyncHandeler( async(req, res) =>{
     //get user details from frontend
@@ -162,8 +162,55 @@ const userLogin = asyncHandeler( async (req, res) =>{
         .json(new ApiResponse(200,{},"User Logged Out"))
 
     })
+
+    const refreshAccessToken = asyncHandeler( async(req,res) =>{
+        const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+
+        if(!incomingRefreshToken){
+            throw new ApiError(401,"unathorized request")
+        }
+
+        // try {
+            const decodedToken = jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET)
+    
+            console.log("decoded User Id-",decodedToken?._id);
+            const user=await User.findById(decodedToken?._id)
+            if(!user){
+                throw new ApiError(401,"Invalid Refresh Token")
+            }
+            // console.log("user token :",user,"\n incoming -- ",incomingRefreshToken)
+            if(incomingRefreshToken !== user.refreshTocken){
+                throw new ApiError(401,"Refresh tocken is expired or used")
+            }
+    
+            const options ={
+                httpOnly:true,
+                secure:true
+            }
+            
+
+            const {accessToken,newRefreshToken}=await generateAcessAndRefreshToken(user._id)
+            return res
+            .status(200)
+            .cookie("accessToken",accessToken)
+            .cookie("refreshToken",newRefreshToken)
+            .json(
+                new ApiResponse(
+                    200,
+                    {accessToken,newRefreshToken},
+                    "Access token refreshed successfully"
+                )
+            )
+        // } catch (error) {
+        //     throw new ApiError("401","Invalid Refresh Token from catch");
+        // }
+    })
+
+
+
 export {
     registerUser,
     userLogin,
-    logoutUser
+    logoutUser,
+    refreshAccessToken
 }
